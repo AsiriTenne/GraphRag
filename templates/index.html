@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GraphRAG Studio — Fast Hybrid Knowledge Graph Chatbot</title>
+  <meta name="description" content="Hybrid GraphRAG system combining spaCy NER extraction, Qdrant vector search, and Neo4j graph traversal with OpenRouter answer generation.">
+
+  <!-- Fonts & Vis.js for Network Diagram -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header class="navbar">
+    <div class="logo-group">
+      <div class="logo-icon">🔮</div>
+      <div>
+        <h1 class="app-title">GraphRAG Studio</h1>
+        <p class="app-subtitle">spaCy Extraction → Qdrant + Neo4j Hybrid Retrieval → OpenRouter Q&A</p>
+      </div>
+    </div>
+
+    <div class="status-badges">
+      <div id="neo4j-badge" class="badge badge-offline">
+        <span class="dot"></span> Neo4j: Checking...
+      </div>
+      <div id="openrouter-badge" class="badge badge-info">
+        <span class="icon">🤖</span> OpenRouter: Loading...
+      </div>
+      <div id="extraction-badge" class="badge badge-info">
+        <span class="icon">⚙️</span> Method: ...
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- Upload & Processing Section -->
+    <section class="card upload-card">
+      <div class="card-header">
+        <h2>📄 Process PDF Document</h2>
+        <span class="card-tag">Pipeline Execution</span>
+      </div>
+
+      <div class="dropzone" id="dropzone">
+        <input type="file" id="pdf-file-input" accept=".pdf" class="file-input">
+        <div class="dropzone-content">
+          <div class="upload-icon">📁</div>
+          <h3>Drag and drop your PDF here</h3>
+          <p>or click to browse files (Max size: 64MB)</p>
+          <div id="selected-file-name" class="selected-file"></div>
+        </div>
+      </div>
+
+      <div class="action-bar">
+        <button id="process-btn" class="btn btn-primary" disabled>
+          <span>🚀 Build Knowledge Graph</span>
+        </button>
+        <select id="extraction-method-select" class="method-select">
+          <option value="spacy">⚡ spaCy (fast)</option>
+          <option value="llm">🦙 Ollama LLM (slow)</option>
+        </select>
+      </div>
+
+      <!-- Live Progress Bar -->
+      <div id="progress-container" class="progress-container hidden">
+        <div class="progress-info">
+          <span id="progress-status">Initializing pipeline...</span>
+          <span id="progress-percent">0%</span>
+        </div>
+        <div class="progress-bar-bg">
+          <div id="progress-bar" class="progress-bar-fill" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <!-- Alert Box -->
+      <div id="alert-box" class="alert-box hidden"></div>
+    </section>
+
+    <!-- Stats Counter Row -->
+    <section class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon">📚</div>
+        <div class="stat-data">
+          <div class="stat-value" id="stat-docs">0</div>
+          <div class="stat-label">Documents</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">🧩</div>
+        <div class="stat-data">
+          <div class="stat-value" id="stat-chunks">0</div>
+          <div class="stat-label">Text Chunks</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">🏷️</div>
+        <div class="stat-data">
+          <div class="stat-value" id="stat-entities">0</div>
+          <div class="stat-label">Entities</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">🔗</div>
+        <div class="stat-data">
+          <div class="stat-value" id="stat-rels">0</div>
+          <div class="stat-label">Relationships</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main Workspace Tabs -->
+    <section class="card workspace-card">
+      <div class="tabs-header">
+        <button class="tab-btn active" data-tab="chat-view">💬 Chat</button>
+        <button class="tab-btn" data-tab="graph-view">🌐 Knowledge Graph</button>
+        <button class="tab-btn" data-tab="entities-view">🔍 Entity Explorer</button>
+        <button class="tab-btn" data-tab="docs-view">📂 Documents</button>
+      </div>
+
+      <div class="tab-content">
+
+        <!-- Tab 0: Chat (new — primary research interface) -->
+        <div id="chat-view" class="tab-pane active">
+          <div class="chat-container">
+
+            <div class="chat-controls">
+              <input
+                type="text"
+                id="doc-filter-input"
+                class="search-input"
+                placeholder="Filter by document ID (optional)…"
+                style="max-width: 280px;"
+              >
+              <span class="chat-hint">Leave blank to search all documents</span>
+            </div>
+
+            <div id="chat-messages" class="chat-messages">
+              <div class="chat-message chat-message--system">
+                <div class="chat-bubble">
+                  👋 Upload a PDF and ask questions about its content.<br>
+                  Answers are grounded in retrieved chunks and graph facts, with page citations.
+                </div>
+              </div>
+            </div>
+
+            <div class="chat-input-bar">
+              <input
+                type="text"
+                id="chat-input"
+                class="chat-input"
+                placeholder="Ask a question about your documents…"
+                autocomplete="off"
+              >
+              <button id="chat-send-btn" class="btn btn-primary">Send</button>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Tab 1: Knowledge Graph Network -->
+        <div id="graph-view" class="tab-pane">
+          <div class="graph-toolbar">
+            <button id="refresh-graph-btn" class="btn btn-secondary btn-sm">🔄 Refresh</button>
+            <button id="show-all-graph-btn" class="btn btn-secondary btn-sm" style="display:none;">🌍 Show All Docs</button>
+            <span id="graph-scope-label" style="font-size:12px; color:#94a3b8; margin-left:8px;"></span>
+            <span class="graph-legend" style="margin-left:auto;">
+              <span class="legend-item"><span class="legend-dot" style="background:#f59e0b;"></span> Document</span>
+              <span class="legend-item"><span class="legend-dot entity"></span> Entity</span>
+              <span class="legend-item"><span class="legend-dot rel"></span> Relationship</span>
+            </span>
+          </div>
+          <div id="network-canvas" class="network-canvas">
+            <div class="canvas-placeholder">Graph network view will appear here once loaded.</div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Entity Explorer -->
+        <div id="entities-view" class="tab-pane">
+          <div class="search-bar">
+            <input type="text" id="entity-search-input" placeholder="Search entities by name or type..." class="search-input">
+            <button id="entity-search-btn" class="btn btn-secondary">Search</button>
+          </div>
+          <div id="entities-list" class="entities-list">
+            <div class="empty-state">No entities found. Search or process a PDF to explore entities.</div>
+          </div>
+        </div>
+
+        <!-- Tab 3: Documents List -->
+        <div id="docs-view" class="tab-pane">
+          <div id="docs-list" class="docs-list">
+            <div class="empty-state">No documents stored in Neo4j yet.</div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

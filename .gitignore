@@ -1,0 +1,41 @@
+.env
+uploads/
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+
+# Environment variables / secrets
+.env
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Qdrant local storage
+qdrant_storage/
+
+# Neo4j local data
+neo4j_data/
+
+# Uploaded/generated documents
+uploads/
+data/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

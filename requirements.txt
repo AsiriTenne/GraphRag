@@ -1,0 +1,17 @@
+flask>=3.0,<4.0
+pdfplumber>=0.11,<1.0
+openai>=1.0,<2.0
+neo4j>=5.0,<6.0
+python-dotenv>=1.0,<2.0
+
+# New: fast NLP extraction
+spacy>=3.7,<4.0
+
+# New: vector embeddings
+sentence-transformers>=2.7,<4.0
+
+# New: Qdrant local vector store (no Docker required)
+qdrant-client>=1.9,<2.0
+
+# New: async-friendly HTTP (used by answer generator)
+httpx>=0.27,<1.0
