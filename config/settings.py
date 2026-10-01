@@ -32,6 +32,10 @@ EMBEDDING_DIM = 384  # fixed for bge-small-en-v1.5
 # Values: "spacy" (fast, no LLM) | "llm" (Ollama, slow but richer)
 EXTRACTION_METHOD = os.getenv("EXTRACTION_METHOD", "spacy")
 
+# Co-occurrence configuration (disabled by default to eliminate graph noise and accelerate ingestion)
+ENABLE_COOCCURRENCE = os.getenv("ENABLE_COOCCURRENCE", "false").lower() in ("true", "1", "yes")
+MAX_COOCCURRENCE_EDGES = int(os.getenv("MAX_COOCCURRENCE_EDGES", "5"))
+
 # ── Chunking ──────────────────────────────────────────────────────────────────
 UPLOAD_DIR = Path(__file__).parent.parent / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)

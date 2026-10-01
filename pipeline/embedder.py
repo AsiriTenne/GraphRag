@@ -22,14 +22,6 @@ from qdrant_client.models import (
     MatchValue,
 )
 
-try:
-    from sentence_transformers import SentenceTransformer
-except ImportError as exc:
-    raise ImportError(
-        "sentence-transformers is not installed. "
-        "Run: pip install sentence-transformers"
-    ) from exc
-
 from config.settings import (
     QDRANT_PATH,
     QDRANT_COLLECTION,
@@ -38,13 +30,20 @@ from config.settings import (
 )
 
 # Module-level cache so the model loads only once per process
-_encoder: Optional[SentenceTransformer] = None
+_encoder: Optional[object] = None
 _client: Optional[QdrantClient] = None
 
 
-def _get_encoder() -> SentenceTransformer:
+def _get_encoder():
     global _encoder
     if _encoder is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError as exc:
+            raise ImportError(
+                "sentence-transformers is not installed. "
+                "Run: pip install sentence-transformers"
+            ) from exc
         _encoder = SentenceTransformer(EMBEDDING_MODEL)
     return _encoder
 
