@@ -66,6 +66,8 @@ _STOPWORD_ENTITIES: frozenset[str] = frozenset({
     "paper", "report", "study", "work", "analysis",
     "human", "humans", "user", "users",
     "ai", "ml", "nlp",  # too generic as standalone names
+    # Relation keywords / system terms sometimes misclassified by NER
+    "uses", "created", "part_of", "associated_with", "mentions", "pipeline", "architecture",
     # Roman numerals / ordinals that slip through
     "i", "ii", "iii", "iv", "vi", "vii", "viii", "ix",
 })
@@ -135,6 +137,132 @@ _WEAK_VERBS: frozenset[str] = frozenset({
     "FOLLOW", "FOLLOWS",
     "COMPARE", "COMPARES",
 })
+
+#: Canonical mapping for extracted relationship predicates.
+_CANONICAL_PREDICATES: dict[str, str] = {
+    # Creation & Development
+    "BUILD": "DEVELOPED",
+    "BUILT": "DEVELOPED",
+    "CREATE": "DEVELOPED",
+    "CREATED": "DEVELOPED",
+    "DESIGN": "DEVELOPED",
+    "DESIGNED": "DEVELOPED",
+    "ENGINEER": "DEVELOPED",
+    "ENGINEERED": "DEVELOPED",
+    "INVENT": "DEVELOPED",
+    "INVENTED": "DEVELOPED",
+    "PRODUCE": "PRODUCES",
+    "PRODUCED": "PRODUCES",
+    "DEVELOP": "DEVELOPED",
+    "DEVELOPED": "DEVELOPED",
+    "MAKE": "DEVELOPED",
+    "MADE": "DEVELOPED",
+    "TRAIN": "TRAINED_ON",
+    "TRAINED": "TRAINED_ON",
+    "TRAIN_ON": "TRAINED_ON",
+    "FINE_TUNE": "FINE_TUNED_ON",
+    "FINE_TUNED": "FINE_TUNED_ON",
+    "AUTHOR": "AUTHORED",
+    "AUTHORED": "AUTHORED",
+    "WRITE": "AUTHORED",
+    "WROTE": "AUTHORED",
+    "PUBLISH": "PUBLISHED",
+    "PUBLISHED": "PUBLISHED",
+    "RELEASE": "RELEASED",
+    "RELEASED": "RELEASED",
+
+    # Organization & Business
+    "FOUND": "FOUNDED",
+    "FOUNDED": "FOUNDED",
+    "ESTABLISH": "FOUNDED",
+    "ESTABLISHED": "FOUNDED",
+    "ACQUIRE": "ACQUIRED",
+    "ACQUIRED": "ACQUIRED",
+    "BUY": "ACQUIRED",
+    "BOUGHT": "ACQUIRED",
+    "PURCHASE": "ACQUIRED",
+    "PURCHASED": "ACQUIRED",
+    "INVEST_IN": "INVESTED_IN",
+    "INVESTS_IN": "INVESTED_IN",
+    "INVESTED_IN": "INVESTED_IN",
+    "PARTNER_WITH": "PARTNERED_WITH",
+    "PARTNERED_WITH": "PARTNERED_WITH",
+    "COLLABORATE_WITH": "PARTNERED_WITH",
+    "HEADQUARTER_IN": "LOCATED_IN",
+    "HEADQUARTERED_IN": "LOCATED_IN",
+    "BASE_IN": "LOCATED_IN",
+    "BASED_IN": "LOCATED_IN",
+    "LOCATE_IN": "LOCATED_IN",
+    "LOCATED_IN": "LOCATED_IN",
+    "OPERATE_IN": "LOCATED_IN",
+    "LEAD": "LEADS",
+    "MANAGE": "LEADS",
+    "DIRECT": "LEADS",
+    "CEO_OF": "LEADS",
+    "DIRECTOR_OF": "LEADS",
+    "FOUNDER_OF": "FOUNDED",
+    "CHAIRMAN_OF": "LEADS",
+
+    # Usage, Integration & Technology
+    "USE": "USES",
+    "USES": "USES",
+    "USED": "USES",
+    "UTILIZE": "USES",
+    "UTILIZES": "USES",
+    "UTILIZED": "USES",
+    "EMPLOY": "USES",
+    "EMPLOYED": "USES",
+    "ADOPT": "USES",
+    "ADOPTED": "USES",
+    "INTEGRATE": "INTEGRATES_WITH",
+    "INTEGRATED": "INTEGRATES_WITH",
+    "INTEGRATES": "INTEGRATES_WITH",
+    "INTEGRATE_WITH": "INTEGRATES_WITH",
+    "INTEGRATES_WITH": "INTEGRATES_WITH",
+    "INCORPORATE": "INTEGRATES_WITH",
+    "SUPPORT": "SUPPORTS",
+    "SUPPORTS": "SUPPORTS",
+    "SUPPORTED": "SUPPORTS",
+    "REQUIRE": "REQUIRES",
+    "REQUIRES": "REQUIRES",
+    "REQUIRED": "REQUIRES",
+    "DEPEND_ON": "DEPENDS_ON",
+    "DEPENDS_ON": "DEPENDS_ON",
+    "EXTEND": "EXTENDS",
+    "EXTENDS": "EXTENDS",
+    "DERIVE_FROM": "DERIVED_FROM",
+    "BASE_ON": "BASED_ON",
+    "BASED_ON": "BASED_ON",
+    "CONTAIN": "CONTAINS",
+    "CONTAINS": "CONTAINS",
+    "CONTAINED": "CONTAINS",
+    "INCLUDE": "CONTAINS",
+    "INCLUDES": "CONTAINS",
+    "PART_OF": "PART_OF",
+    "SUBSIDIARY_OF": "PART_OF",
+    "COMPONENT_OF": "PART_OF",
+}
+
+
+class PredicateNormalizer:
+    """Normalizes and canonicalizes relationship predicates."""
+
+    def __init__(self, canonical_map: Optional[dict[str, str]] = None) -> None:
+        self._canonical_map = (
+            dict(canonical_map) if canonical_map is not None else dict(_CANONICAL_PREDICATES)
+        )
+
+    def normalize(self, predicate: str) -> str:
+        """Clean and normalize a relationship predicate."""
+        if not predicate:
+            return "ASSOCIATED_WITH"
+
+        cleaned = predicate.strip().upper()
+        cleaned = re.sub(r"[^A-Z0-9_]+", "_", cleaned).strip("_")
+        if not cleaned:
+            return "ASSOCIATED_WITH"
+
+        return self._canonical_map.get(cleaned, cleaned)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Tech-name normalization tables
@@ -443,6 +571,7 @@ class RelationshipFilter:
         weak_verbs: Optional[frozenset[str]] = None,
         extra_weak_verbs: Optional[Iterable[str]] = None,
         filter_orphans: bool = True,
+        predicate_normalizer: Optional[PredicateNormalizer] = None,
     ) -> None:
         self._weak_verbs: frozenset[str] = (
             weak_verbs if weak_verbs is not None else _WEAK_VERBS
@@ -452,6 +581,9 @@ class RelationshipFilter:
                 v.upper() for v in extra_weak_verbs
             )
         self.filter_orphans = filter_orphans
+        self.predicate_normalizer = (
+            predicate_normalizer if predicate_normalizer is not None else PredicateNormalizer()
+        )
 
     def should_keep(
         self,
@@ -472,6 +604,10 @@ class RelationshipFilter:
                 return False
             if tgt.lower() not in entity_names_lower:
                 return False
+
+        # Endpoints should not be stopword terms or system tokens
+        if src.lower() in _STOPWORD_ENTITIES or tgt.lower() in _STOPWORD_ENTITIES:
+            return False
 
         # Weak-verb guard (skip for CO_OCCURS_WITH)
         verb = rel.relationship.upper()
@@ -497,6 +633,8 @@ class RelationshipFilter:
         )
         kept, removed = [], []
         for rel in relationships:
+            # Canonicalize relationship predicate first
+            rel.relationship = self.predicate_normalizer.normalize(rel.relationship)
             (kept if self.should_keep(rel, entity_names_lower) else removed).append(rel)
         return kept, removed
 

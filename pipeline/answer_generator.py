@@ -15,8 +15,6 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
-from openai import OpenAI
-
 from config.settings import (
     OPENROUTER_API_KEY,
     OPENROUTER_MODEL,
@@ -139,6 +137,7 @@ def generate_answer(
         "Cite sources inline."
     )
 
+    from openai import OpenAI
     client = OpenAI(
         api_key=OPENROUTER_API_KEY,
         base_url=OPENROUTER_BASE_URL,
